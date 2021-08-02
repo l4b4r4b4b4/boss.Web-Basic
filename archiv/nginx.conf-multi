@@ -1,0 +1,139 @@
+map $http_host $blogid {
+    default       -999;
+
+    #Ref: http://wordpress.org/extend/plugins/nginx-helper/
+    #include /var/www/wordpress/wp-content/plugins/nginx-helper/map.conf ;
+
+}
+
+server {
+    listen 7777;
+    listen [::]:7777;
+    server_name triversum.li *.triversum.li;
+#    server_name triversum.li svenbluhm.triversum.li frankzech.triversum.li; 
+    index index.php index.html index.htm;
+
+    root /var/www/html;
+
+#    location / {
+ #       try_files $uri $uri/ /index.php?$args ;
+  #  }
+
+    location / {
+            try_files /wp-content/w3tc-$host/pgcache/$cache_uri/_index.html $uri $uri/ /index.php?$args;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass wordpress:9000;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+    }
+
+    #WPMU Files
+    location ~ ^/files/(.*)$ {
+            try_files /wp-content/blogs.dir/$blogid/$uri /wp-includes/ms-files.php?file=$1 ;
+            access_log off; log_not_found off;      expires max;
+    }
+
+    #WPMU x-sendfile to avoid php readfile()
+    location ^~ /blogs.dir {
+        internal;
+        alias /var/www/triversum.li/htdocs/wp-content/blogs.dir;
+        access_log off;     log_not_found off;      expires max;
+    }
+
+   #add some rules for static content expiry-headers here
+
+    # Hide the nginx version.
+    server_tokens off;
+
+    # Limit XMLRPC Access
+    location ~* /xmlrpc.php$ {
+        allow 172.0.1.1;
+        deny all;
+    }    
+
+    # Hide the PHP version.
+    fastcgi_hide_header X-Powered-By;
+    proxy_hide_header X-Powered-By;
+
+    # Security Headers
+    # add_header X-Frame-Options SAMEORIGIN;
+    add_header Strict-Transport-Security "max-age=31536000";
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+
+    # Reduce Spam
+    # Spam comment, although it may not break your site, it’ll flood your database with garbage content or a malicious content 
+    # that could possibly leverage as a vector. To reduce spam entries, you can add the following rules to your Nginx config 
+    # alongside with a Spam protection plugin 
+    set $comment_flagged 0;
+    set $comment_request_method 0;
+    set $comment_request_uri 0;
+    set $comment_referrer 1;
+
+    if ($request_method ~ "POST"){
+        set $comment_request_method 1;
+    }
+     
+    if ($request_uri ~ "/wp-comments-post\.php$"){
+        set $comment_request_method 1;
+    }
+     
+    if ($http_referer !~ "^https?://(([^/]+\.)?site\.com|jetpack\.wordpress\.com/jetpack-comment)(/|$)"){
+        set $comment_referrer 0;
+    }
+     
+    set $comment_flagged "${comment_request_method}${comment_request_uri}${comment_referrer}";
+    if ($comment_flagged = "111") {
+        return 403;
+    }
+
+    # Limit Dotfiles
+    ## Similar to PHP file, a dotfile like .htaccess, .user.ini, and .git may contain sensitive information. 
+    ## To be on the safer side, it’s better to disable direct access to these files.
+    location ~ /\.(svn|git)/* {
+    deny all;
+    access_log off;
+    log_not_found off;
+    }
+    location ~ /\.ht {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+    location ~ /\.user.ini { 
+        deny all; 
+        access_log off;
+        log_not_found off;
+    }
+
+    # Disable Directory Listing
+    autoindex off;
+
+    #W3 TOTAL CACHE CHECK 
+    set $cache_uri $request_uri;
+     
+    # POST requests and urls with a query string should always go to PHP
+    if ($request_method = POST) {
+            set $cache_uri 'null cache';
+    }   
+    if ($query_string != "") {
+            set $cache_uri 'null cache';
+    }   
+     
+    # Don't cache uris containing the following segments
+    if ($request_uri ~* "(/wp-admin/|/xmlrpc.php|/wp-(app|cron|login|register|mail).php|wp-.*.php|/feed/|index.php|wp-comments-popup.php|wp-links-opml.php|wp-locations.php|sitemap(_index)?.xml|[a-z0-9_-]+-sitemap([0-9]+)?.xml)") {
+            set $cache_uri 'null cache';
+    }   
+     
+    # Don't use the cache for logged in users or recent commenters
+    if ($http_cookie ~* "comment_author|wordpress_[a-f0-9]+|wp-postpass|wordpress_logged_in") {
+            set $cache_uri 'null cache';
+    }
+    #ADD mobile rules from WP SUPER CACHE section above
+}

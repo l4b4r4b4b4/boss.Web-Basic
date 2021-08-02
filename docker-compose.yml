@@ -1,0 +1,95 @@
+version: '2'
+
+volumes:
+  wordpress-multiside:
+  dbdata-multiside:
+
+networks:
+  www-iem-experten.de-network:
+    driver: bridge
+  web:
+    external: true
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: ${SUB}-${DOMAIN}-db
+    restart: unless-stopped
+    env_file: .env
+    cap_add:
+      - SYS_NICE
+    environment:
+      - MYSQL_DATABASE=$MYSQL_DATABASE
+    volumes: 
+      - dbdata-multiside:/var/lib/mysql
+    command: '--default-authentication-plugin=mysql_native_password'
+    networks:
+      - ${SUB}-${DOMAIN}-network
+  
+  iem-wordpress:
+    depends_on: 
+      - db
+      - redis
+    links:
+      - db
+      - redis
+    build: ./php
+    container_name: ${SUB}-${DOMAIN}-cms
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "9000:9000"
+    expose:
+      - 9000
+    environment:
+      - WORDPRESS_DB_HOST=db:3306
+      - WORDPRESS_DB_USER=$MYSQL_USER
+      - WORDPRESS_DB_PASSWORD=$MYSQL_PASSWORD
+      - WORDPRESS_DB_NAME=$MYSQL_DATABASE
+      - WORDPRESS_LOCAL_DEV=true
+    volumes:
+      - wordpress-multiside:/var/www/html
+    networks:
+      - ${SUB}-${DOMAIN}-network
+
+  redis:
+    image: redis:alpine
+    container_name: ${SUB}-${DOMAIN}-redis
+    command: redis-server --requirepass ${REDIS_PASS}
+    restart: always
+    networks:
+      - ${SUB}-${DOMAIN}-network
+
+  webserver:
+    depends_on:
+      - iem-wordpress
+    links:
+      - iem-wordpress
+      - redis
+    image: nginx
+    container_name: ${SUB}-${DOMAIN}-webserver
+    restart: unless-stopped
+    expose:
+      - "${PORT}"
+    extra_hosts:
+      - "${SUB}.${DOMAIN}:127.0.0.1"
+    volumes:
+      - wordpress-multiside:/var/www/html
+      - ./nginx-conf:/etc/nginx/conf.d
+      - ../../connect.Bot/data/certs/:/etc/letsencrypt
+    networks:
+      - ${SUB}-${DOMAIN}-network
+      - web
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.wordpress.rule=Host(`iem-experten.de`) || Host(`www.iem-experten.de`)"
+      - "traefik.http.routers.wordpress.entrypoints=websecure"
+      - "traefik.http.routers.wordpress.tls=true"
+      - "traefik.http.routers.wordpress.service=wordpress"
+      - "traefik.http.routers.wordpress.tls.certresolver=myresolver"
+      - "traefik.http.services.wordpress.loadbalancer.server.port=${PORT}"
+      - "traefik.http.routers.wordpress.middlewares=compress"
+      - "traefik.http.middlewares.compress.compress=true"
+
