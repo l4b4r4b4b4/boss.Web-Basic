@@ -12,8 +12,8 @@ RUN set -ex \
 
 RUN touch /usr/local/etc/php/conf.d/memory-limit.ini && echo "memory_limit=512M" >> /usr/local/etc/php/conf.d/memory-limit.ini && \
     touch /usr/local/etc/php/conf.d/max-execution-time.ini && echo "max_execution_time=120" >> /usr/local/etc/php/conf.d/max-execution-time.ini && \
-    sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 1512M/g' /usr/local/etc/php/php.ini-production && \
-    sed -i 's/post_max_size = 8M/post_max_size = 1513M/g' /usr/local/etc/php/php.ini-production && \
+    sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 512M/g' /usr/local/etc/php/php.ini-production && \
+    sed -i 's/post_max_size = 8M/post_max_size = 513M/g' /usr/local/etc/php/php.ini-production && \
     cp /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini && \
     sed -i "s/;env\[HOSTNAME\] = /env[HOSTNAME] = /" /usr/local/etc/php-fpm.d/www.conf && \
     sed -i "s/;env\[TMP\] = /env[TMP] = /" /usr/local/etc/php-fpm.d/www.conf && \
