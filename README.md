@@ -46,7 +46,7 @@ docker-compose up -d && docker-compose logs -f
 
 5. Wordpress installieren
 
-![WordpressInstallation.gif](WordpressInstallation.gif?fileId=232495#mimetype=image%2Fgif&hasPreview=true)
+
 
 ## Produktion
 
