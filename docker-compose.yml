@@ -63,9 +63,9 @@ services:
 
   webserver:
     depends_on:
-      - iem-wordpress
+      - wordpress
     links:
-      - iem-wordpress
+      - wordpress
       - redis
     image: nginx
     container_name: ${SUB}-${DOMAIN}-webserver
